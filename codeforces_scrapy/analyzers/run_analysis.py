@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     # === Structure Analysis ===
     print("\n=== Structure Analysis ===")
-    structure = analyze_structure(data)
-    visualize_structure(structure, limit=5)
-
+    structure = analyze_structure(data) 
+    visualize_structure(structure, limit=5, output_dir=output_dir)
+    
     print(f"\n✅ Phân tích xong. Kết quả CSV đã lưu trong folder '{output_dir}'")
