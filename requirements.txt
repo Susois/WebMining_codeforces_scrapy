@@ -1,0 +1,9 @@
+Scrapy
+pymongo
+beautifulsoup4
+pandas
+numpy
+dash
+streamlit
+jupyter
+requests

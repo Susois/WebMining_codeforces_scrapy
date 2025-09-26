@@ -1,0 +1,24 @@
+# Bỏ thư mục notebooks và venv
+notebooks/
+venv/
+
+# Bỏ file .env ở thư mục gốc
+.env
+
+# Trong codeforces_scrapy/
+codeforces_scrapy/analyzers/
+codeforces_scrapy/__pycache__/
+codeforces_scrapy/dashboard/
+codeforces_scrapy/knowledge_graph/
+codeforces_scrapy/.env
+
+# Trong spiders/
+codeforces_scrapy/spiders/__pycache__/
+codeforces_scrapy/spiders/.env
+
+# File hệ thống của VSCode và Python
+.vscode/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
