@@ -14,9 +14,9 @@ from structure_analysis import analyze_structure, visualize_structure
 def load_data_from_mongo():
     load_dotenv()  # load biến môi trường từ .env
 
-    uri = os.getenv("MONGO_URI") or "mongodb://localhost:27017"
-    db_name = os.getenv("MONGO_DATABASE", "codeforces")
-    collection_name = os.getenv("MONGO_COLLECTION", "problems")
+    uri = os.getenv("MONGODB_URI") or "mongodb://localhost:27017"
+    db_name = os.getenv("MONGODb_DB", "codeforces")
+    collection_name = os.getenv("MONGODB_COLLECTION", "problems")
 
     client = pymongo.MongoClient(uri)
     db = client[db_name]
