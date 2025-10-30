@@ -37,8 +37,14 @@ codeforces_project/
 │   └── web_mining_analysis.py         # Script phân tích         
 ├── ML_randomforest/
 │   └── rating_predictor.py            # Random Forest model
-├── dashboard/
-│   └── dashboard.html                 # React dashboard
+├── codeforces-dashboard/
+│   ├── public/
+│   │    ├── index.html   
+│   ├── src/   
+|   │    ├── App.css
+|   │    ├── App.js                    # React dashboard
+|   └── services/
+|        └── api.js
 ├── .env
 └── requirements.txt
 ```
