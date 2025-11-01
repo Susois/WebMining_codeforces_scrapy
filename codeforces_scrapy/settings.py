@@ -17,6 +17,16 @@ ITEM_PIPELINES = {
     "codeforces_scrapy.mongo_pipeline.EnhancedMongoPipeline": 300,
 }
 
+# Tăng concurrent requests để crawl nhanh hơn
+CONCURRENT_REQUESTS = 8
+CONCURRENT_REQUESTS_PER_DOMAIN = 4
+
+# AutoThrottle để tránh bị ban
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 1
+AUTOTHROTTLE_MAX_DELAY = 3
+AUTOTHROTTLE_TARGET_CONCURRENCY = 2.0
+
 # Load .env file
 try:
     from dotenv import load_dotenv
@@ -30,8 +40,8 @@ MONGO_DATABASE = os.getenv("MONGO_DATABASE", os.getenv("MONGODB_DB", "codeforces
 MONGO_COLLECTION = os.getenv("MONGO_COLLECTION", os.getenv("MONGODB_COLLECTION", "problems"))
 
 # Request settings để tránh bị ban
-CONCURRENT_REQUESTS = 1
-DOWNLOAD_DELAY = 2
+CONCURRENT_REQUESTS = 16
+DOWNLOAD_DELAY = 1
 AUTOTHROTTLE_ENABLED = True
 AUTOTHROTTLE_START_DELAY = 1
 AUTOTHROTTLE_MAX_DELAY = 10

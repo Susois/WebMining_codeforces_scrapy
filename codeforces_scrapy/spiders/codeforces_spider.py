@@ -88,7 +88,7 @@ class CodeforcesEnhancedSpider(scrapy.Spider):
             self.logger.info(f"Found {len(users)} users")
             
             # Lấy top users để crawl submissions (có thể giới hạn số lượng)
-            top_users = users[:500]  # Top 500 users
+            top_users = users[:2000]  # Top 2000 users
             
             for user in top_users:
                 item = CodeforcesUser()
@@ -107,7 +107,7 @@ class CodeforcesEnhancedSpider(scrapy.Spider):
                 
                 # Crawl submissions của user này
                 yield scrapy.Request(
-                    url=f"https://codeforces.com/api/user.status?handle={item['handle']}&from=1&count=100",
+                    url=f"https://codeforces.com/api/user.status?handle={item['handle']}&from=1&count=500",
                     callback=self.parse_user_submissions,
                     meta={'handle': item['handle']},
                     errback=self.handle_error
