@@ -105,7 +105,7 @@ function App() {
     },
     { 
       icon: Activity, 
-      label: 'Solved', 
+      label: 'Submissions', 
       value: data.submissions.length, 
       color: 'bg-purple-500' 
     },
