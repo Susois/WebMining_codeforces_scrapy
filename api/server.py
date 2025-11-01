@@ -120,7 +120,7 @@ def get_submissions():
             submissions = list(cursor)
         else:
             # Mặc định lấy 10000 để balance giữa performance và data
-            default_limit = limit if limit else 50000
+            default_limit = limit if limit else 100000
             submissions = list(cursor.limit(default_limit))
         
         print(f"✅ Returned {len(submissions)} submissions (skip={skip}, limit={limit or 'default'})")
