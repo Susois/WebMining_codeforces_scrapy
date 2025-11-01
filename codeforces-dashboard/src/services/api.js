@@ -1,129 +1,91 @@
-import axios from 'axios';
+// services/api.js
+const API_BASE_URL = 'http://localhost:5000/api';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Increased timeout for large datasets (5 minutes)
+const FETCH_TIMEOUT = 300000; // 300 seconds = 5 minutes
 
-const api = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 60000, // 60 seconds (tăng timeout cho queries lớn)
-    headers: {
-        'Content-Type': 'application/json',
-    }
-});
+/**
+ * Fetch with timeout support
+ */
+const fetchWithTimeout = async(url, options = {}, timeout = FETCH_TIMEOUT) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
 
-// Request interceptor
-api.interceptors.request.use(
-    (config) => {
-        console.log(`🔄 API Request: ${config.method.toUpperCase()} ${config.url}`);
-        return config;
-    },
-    (error) => {
-        console.error('❌ API Request Error:', error);
-        return Promise.reject(error);
-    }
-);
-
-// Response interceptor
-api.interceptors.response.use(
-    (response) => {
-        const dataLength = Array.isArray(response.data) ? response.data.length : 'N/A';
-        console.log(`✅ API Response: ${response.config.url} (${dataLength} items)`);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+        clearTimeout(id);
         return response;
-    },
-    (error) => {
-        console.error('❌ API Response Error:', error.message);
-        return Promise.reject(error);
-    }
-);
-
-// ==================== API METHODS ====================
-
-/**
- * Fetch problems (all or limited)
- */
-export const fetchProblems = async(limit = null) => {
-    try {
-        const params = limit ? { limit } : {};
-        const response = await api.get('/problems', { params });
-        return response.data;
     } catch (error) {
-        console.error('Error fetching problems:', error);
+        clearTimeout(id);
+        if (error.name === 'AbortError') {
+            throw new Error(`Request timeout after ${timeout / 1000}s. The dataset might be too large.`);
+        }
         throw error;
     }
 };
 
 /**
- * Fetch users (all or limited)
+ * Fetch all data for dashboard including analysis report
  */
-export const fetchUsers = async(limit = null) => {
+export const fetchAllData = async() => {
     try {
-        const params = limit ? { limit } : {};
-        const response = await api.get('/users', { params });
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        throw error;
-    }
-};
+        console.log('🔄 Fetching data from Flask API...');
+        console.log('⏱️  This may take 30-120 seconds for large datasets...');
 
-/**
- * Fetch submissions
- * @param {Object} options - { all: boolean, limit: number }
- */
-export const fetchSubmissions = async(options = {}) => {
-    try {
-        const params = {};
+        const startTime = Date.now();
+        const response = await fetchWithTimeout(`${API_BASE_URL}/data`);
 
-        if (options.all) {
-            params.all = 'true';
-            console.warn('⚠️ Fetching ALL submissions - this may take time...');
-        } else if (options.limit) {
-            params.limit = options.limit;
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const response = await api.get('/submissions', { params });
-        return response.data;
+        const data = await response.json();
+        const loadTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+        if (data.status === 'error') {
+            throw new Error(data.error || 'Unknown error');
+        }
+
+        console.log(`✅ Data loaded successfully in ${loadTime}s:`, {
+            problems: data.problems ? .length || 0,
+            users: data.users ? .length || 0,
+            submissions: data.submissions ? .length || 0,
+            hasAnalysis: !!data.analysis ? .content_mining
+        });
+
+        return data;
     } catch (error) {
-        console.error('Error fetching submissions:', error);
+        console.error('❌ Error fetching data:', error);
         throw error;
     }
 };
 
 /**
- * Fetch submission statistics (FAST - aggregated data)
- * Sử dụng endpoint này thay vì fetch all submissions
+ * Fetch only analysis report (faster for refresh)
  */
-export const fetchSubmissionStats = async() => {
+export const fetchAnalysisOnly = async() => {
     try {
-        const response = await api.get('/submissions/stats');
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching submission stats:', error);
-        throw error;
-    }
-};
+        console.log('📊 Fetching analysis report...');
+        const response = await fetchWithTimeout(`${API_BASE_URL}/analysis`, {}, 30000); // 30s timeout
 
-/**
- * Fetch analysis report
- */
-export const fetchAnalysis = async() => {
-    try {
-        const response = await api.get('/analysis');
-        return response.data;
-    } catch (error) {
-        console.error('Error fetching analysis:', error);
-        throw error;
-    }
-};
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-/**
- * Fetch overall statistics (counts only - very fast)
- */
-export const fetchStats = async() => {
-    try {
-        const response = await api.get('/stats');
-        return response.data;
+        const data = await response.json();
+
+        if (data.status === 'error') {
+            console.warn('⚠️ No analysis report found:', data.message);
+            return data.analysis; // Return empty structure
+        }
+
+        console.log('✅ Analysis loaded');
+        return data.analysis;
     } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('❌ Error fetching analysis:', error);
         throw error;
     }
 };
@@ -131,105 +93,30 @@ export const fetchStats = async() => {
 /**
  * Health check
  */
-export const healthCheck = async() => {
+export const checkHealth = async() => {
     try {
-        const response = await api.get('/health');
-        return response.data;
+        const response = await fetchWithTimeout(`${API_BASE_URL}/health`, {}, 10000); // 10s timeout
+        const data = await response.json();
+        return data;
     } catch (error) {
-        console.error('Error in health check:', error);
+        console.error('❌ Health check failed:', error);
         throw error;
     }
 };
 
 /**
- * Fetch all data (optimized version)
- * Options:
- * - fastMode: true = use stats instead of full data (default)
- * - submissionsLimit: number of submissions to fetch
+ * Get quick stats (faster than full data)
  */
-export const fetchAllData = async(options = {}) => {
-    const { fastMode = true, submissionsLimit = 100000 } = options;
-
+export const fetchStats = async() => {
     try {
-        console.log('🚀 Loading data...', { fastMode, submissionsLimit });
-
-        if (fastMode) {
-            // FAST MODE: Use aggregated stats + limited submissions
-            const [problems, users, submissionStats, analysis, stats] = await Promise.all([
-                fetchProblems(),
-                fetchUsers(),
-                fetchSubmissionStats(), // Use stats instead of full data
-                fetchAnalysis(),
-                fetchStats()
-            ]);
-
-            // Create pseudo submissions for charts (from stats)
-            const pseudoSubmissions = createPseudoSubmissions(submissionStats);
-
-            return {
-                problems,
-                users,
-                submissions: pseudoSubmissions,
-                submissionStats,
-                analysis,
-                stats
-            };
-        } else {
-            // FULL MODE: Fetch actual submissions (slower)
-            const [problems, users, submissions, analysis] = await Promise.all([
-                fetchProblems(),
-                fetchUsers(),
-                fetchSubmissions({ limit: submissionsLimit }),
-                fetchAnalysis()
-            ]);
-
-            return {
-                problems,
-                users,
-                submissions,
-                analysis
-            };
+        const response = await fetchWithTimeout(`${API_BASE_URL}/stats`, {}, 30000); // 30s timeout
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        const data = await response.json();
+        return data;
     } catch (error) {
-        console.error('Error fetching all data:', error);
+        console.error('❌ Error fetching stats:', error);
         throw error;
     }
 };
-
-/**
- * Create pseudo submissions from aggregated stats
- * Để charts vẫn hoạt động mà không cần load full data
- */
-function createPseudoSubmissions(stats) {
-    const submissions = [];
-
-    // Create pseudo submissions from verdict distribution
-    if (stats.verdict_distribution) {
-        Object.entries(stats.verdict_distribution).forEach(([verdict, count]) => {
-            // Tạo một vài pseudo submissions cho mỗi verdict
-            const sampleSize = Math.min(count, 100);
-            for (let i = 0; i < sampleSize; i++) {
-                submissions.push({
-                    verdict,
-                    programming_language: 'Unknown',
-                    _pseudo: true
-                });
-            }
-        });
-    }
-
-    // Add language info from stats
-    if (stats.language_distribution) {
-        let idx = 0;
-        Object.entries(stats.language_distribution).forEach(([lang, count]) => {
-            const sampleSize = Math.min(count, 100);
-            for (let i = 0; i < sampleSize && idx < submissions.length; i++, idx++) {
-                submissions[idx].programming_language = lang;
-            }
-        });
-    }
-
-    return submissions;
-}
-
-export default api;
