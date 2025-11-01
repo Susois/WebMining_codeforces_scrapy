@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path)
 
-# Sanitize function
+# Sanitize function - cải tiến
 def sanitize_document(doc):
     """Đệ quy chuyển đổi ObjectId và các kiểu không-JSON thành string."""
     if isinstance(doc, dict):
@@ -33,22 +33,148 @@ def sanitize_document(doc):
         return str(doc)
     return doc
 
+# Alias cho tương thích
+convert_objectid = sanitize_document
+
 # Initialize Flask
 app = Flask(__name__)
 CORS(app)
 
 # MongoDB connection
+# MongoDB connection with increased timeouts
 MONGO_URI = os.getenv("MONGODB_URI")
 if not MONGO_URI:
-    print("LỖI: MONGODB_URI không được tìm thấy. Hãy kiểm tra file .env của bạn.")
+    print("CẢNH BÁO: MONGODB_URI không được tìm thấy trong .env")
     MONGO_URI = "mongodb+srv://admin:Subaru1615@susoiswebminingcodeforc.ttmjjlf.mongodb.net/"
 
-client = MongoClient(MONGO_URI)
+# Tăng timeout cho MongoDB connection
+client = MongoClient(
+    MONGO_URI,
+    serverSelectionTimeoutMS=60000,  # 60 seconds
+    socketTimeoutMS=120000,  # 120 seconds
+    connectTimeoutMS=60000,  # 60 seconds
+    maxPoolSize=50,  # Increase connection pool
+    retryWrites=True
+)
 db = client["codeforces"]
 
-print("Đã kết nối với MongoDB!")
+print("✅ Đã kết nối với MongoDB!")
 
-# ==================== API ENDPOINTS ====================
+# ==================== NEW ENDPOINTS FOR DASHBOARD ====================
+
+@app.route('/api/data', methods=['GET'])
+def get_all_data():
+    """
+    Endpoint chính cho Dashboard
+    Trả về: problems + users + submissions + analysis report
+    """
+    try:
+        print("\n" + "="*60)
+        print("📊 FETCHING DATA FOR DASHBOARD")
+        print("="*60)
+        
+        # Fetch data from collections - TẤT CẢ problems và users, 100k submissions
+        problems = list(db.problems.find({}, {'_id': 0}))  # ALL problems
+        users = list(db.users.find({}, {'_id': 0}))  # ALL users
+        submissions = list(db.submissions.find({}, {'_id': 0}).limit(1000000))  # 100k submissions
+        
+        print(f"✅ Problems: {len(problems)}")
+        print(f"✅ Users: {len(users)}")
+        print(f"✅ Submissions: {len(submissions)}")
+        
+        # Fetch latest analysis report
+        analysis_report = db.analysis_reports.find_one(
+            {},
+            {'_id': 0},
+            sort=[("timestamp", -1)]
+        )
+        
+        if not analysis_report:
+            print("⚠️  No analysis report found! Creating empty structure...")
+            print("💡 Run 'python web_mining_analysis.py' to generate analysis")
+            analysis_report = {
+                'content_mining': {},
+                'structure_mining': {},
+                'usage_mining': {},
+                'timestamp': None
+            }
+        else:
+            print(f"✅ Analysis Report: {analysis_report.get('timestamp', 'unknown')}")
+            print(f"   └─ Content Mining: {len(analysis_report.get('content_mining', {}))} metrics")
+            print(f"   └─ Structure Mining: {len(analysis_report.get('structure_mining', {}))} metrics")
+            print(f"   └─ Usage Mining: {len(analysis_report.get('usage_mining', {}))} metrics")
+        
+        # Sanitize all data
+        response = {
+            'problems': convert_objectid(problems),
+            'users': convert_objectid(users),
+            'submissions': convert_objectid(submissions),
+            'analysis': convert_objectid(analysis_report),
+            'status': 'success'
+        }
+        
+        print("="*60)
+        print("✅ Data package ready for dashboard")
+        print("="*60 + "\n")
+        
+        return jsonify(response)
+    
+    except Exception as e:
+        print(f"\n❌ ERROR in /api/data: {e}\n")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+
+@app.route('/api/analysis', methods=['GET'])
+def get_analysis_only():
+    """
+    Lấy chỉ analysis report
+    Hữu ích cho refresh riêng phần analysis
+    """
+    try:
+        print("\n📊 Fetching latest analysis report...")
+        
+        analysis_report = db.analysis_reports.find_one(
+            {},
+            {'_id': 0},
+            sort=[("timestamp", -1)]
+        )
+        
+        if not analysis_report:
+            print("⚠️  No analysis report found in database!")
+            print("💡 Run 'python web_mining_analysis.py' to generate analysis first\n")
+            return jsonify({
+                'error': 'No analysis report found',
+                'message': 'Please run web_mining_analysis.py first to generate the report',
+                'status': 'error',
+                'analysis': {
+                    'content_mining': {},
+                    'structure_mining': {},
+                    'usage_mining': {}
+                }
+            }), 404
+        
+        print(f"✅ Found analysis report from {analysis_report.get('timestamp', 'unknown')}")
+        print(f"   └─ Content Mining: {len(analysis_report.get('content_mining', {}))} keys")
+        print(f"   └─ Structure Mining: {len(analysis_report.get('structure_mining', {}))} keys")
+        print(f"   └─ Usage Mining: {len(analysis_report.get('usage_mining', {}))} keys\n")
+        
+        return jsonify({
+            'analysis': convert_objectid(analysis_report),
+            'status': 'success'
+        })
+    
+    except Exception as e:
+        print(f"❌ Error in /api/analysis: {e}\n")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+
+# ==================== ORIGINAL ENDPOINTS (Kept for compatibility) ====================
 
 @app.route('/api/problems')
 def get_problems():
@@ -120,7 +246,7 @@ def get_submissions():
             submissions = list(cursor)
         else:
             # Mặc định lấy 10000 để balance giữa performance và data
-            default_limit = limit if limit else 100000
+            default_limit = limit if limit else 10000
             submissions = list(cursor.limit(default_limit))
         
         print(f"✅ Returned {len(submissions)} submissions (skip={skip}, limit={limit or 'default'})")
@@ -183,26 +309,6 @@ def get_submission_stats():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/analysis')
-def get_analysis():
-    """Lấy báo cáo phân tích MỚI NHẤT"""
-    try:
-        report = db.analysis_reports.find_one({}, {'_id': 0}, sort=[('timestamp', -1)])
-        
-        if not report:
-            return jsonify({
-                "content_mining": {},
-                "structure_mining": {},
-                "usage_mining": {}
-            })
-        
-        print("✅ Returned latest analysis report")
-        return jsonify(sanitize_document(report))
-    except Exception as e:
-        print(f"❌ Error in /api/analysis: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route('/api/stats')
 def get_stats():
     """
@@ -216,6 +322,7 @@ def get_stats():
             "total_submissions": db.submissions.count_documents({}),
             "problems_with_rating": db.problems.count_documents({"rating": {"$ne": None}}),
             "problems_without_rating": db.problems.count_documents({"rating": None}),
+            "total_analysis_reports": db.analysis_reports.count_documents({})
         }
         
         # Average rating
@@ -240,13 +347,23 @@ def health_check():
     try:
         # Ping MongoDB
         client.admin.command('ping')
+        
+        # Check if analysis report exists
+        has_analysis = db.analysis_reports.count_documents({}) > 0
+        latest_analysis = db.analysis_reports.find_one({}, {'timestamp': 1}, sort=[("timestamp", -1)])
+        
         return jsonify({
             "status": "healthy",
             "database": "connected",
             "collections": {
                 "problems": db.problems.count_documents({}),
                 "users": db.users.count_documents({}),
-                "submissions": db.submissions.count_documents({})
+                "submissions": db.submissions.count_documents({}),
+                "analysis_reports": db.analysis_reports.count_documents({})
+            },
+            "analysis": {
+                "available": has_analysis,
+                "latest_timestamp": latest_analysis.get('timestamp') if latest_analysis else None
             }
         })
     except Exception as e:
@@ -257,23 +374,38 @@ def health_check():
 
 
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("Flask API Server - Codeforces Analytics")
-    print("="*60)
-    print(f"Problems: {db.problems.count_documents({})}")
-    print(f"Users: {db.users.count_documents({})}")
-    print(f"Submissions: {db.submissions.count_documents({})}")
-    print("="*60)
-    print("Flask server đang chạy tại http://localhost:5000")
-    print("Endpoints:")
-    print("  - GET /api/problems")
-    print("  - GET /api/users")
-    print("  - GET /api/submissions?limit=10000")
-    print("  - GET /api/submissions?all=true  (lấy tất cả)")
-    print("  - GET /api/submissions/stats  (nhanh)")
-    print("  - GET /api/analysis")
-    print("  - GET /api/stats")
-    print("  - GET /api/health")
-    print("="*60 + "\n")
+    print("\n" + "="*70)
+    print("🚀 Flask API Server - Codeforces Analytics Dashboard")
+    print("="*70)
+    print(f"📊 Database Collections:")
+    print(f"   ├─ Problems: {db.problems.count_documents({}):,}")
+    print(f"   ├─ Users: {db.users.count_documents({}):,}")
+    print(f"   ├─ Submissions: {db.submissions.count_documents({}):,}")
+    print(f"   └─ Analysis Reports: {db.analysis_reports.count_documents({})}")
     
-    app.run(port=5000, debug=True)
+    # Check if analysis exists
+    latest_analysis = db.analysis_reports.find_one({}, {'timestamp': 1}, sort=[("timestamp", -1)])
+    if latest_analysis:
+        print(f"\n✅ Latest Analysis: {latest_analysis.get('timestamp', 'Unknown')}")
+    else:
+        print(f"\n⚠️  No analysis report found!")
+        print(f"💡 Run: python web_mining_analysis.py")
+    
+    print("="*70)
+    print("🌐 Server running at: http://localhost:5000")
+    print("="*70)
+    print("📍 API Endpoints:")
+    print("   🎯 DASHBOARD ENDPOINTS (Primary):")
+    print("      GET /api/data              - Complete data package for dashboard")
+    print("      GET /api/analysis          - Analysis report only")
+    print("      GET /api/health            - Health check with full status")
+    print("")
+    print("   📊 DATA ENDPOINTS (Legacy/Direct Access):")
+    print("      GET /api/problems          - All problems")
+    print("      GET /api/users             - All users")
+    print("      GET /api/submissions       - Submissions (default 10k)")
+    print("      GET /api/submissions/stats - Aggregated submission stats")
+    print("      GET /api/stats             - Quick stats overview")
+    print("="*70 + "\n")
+    
+    app.run(port=5000, debug=True, host='0.0.0.0')
