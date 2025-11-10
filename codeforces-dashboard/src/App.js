@@ -350,24 +350,35 @@ const UsageMiningTab = ({ usageMining }) => {
       </div>
 
       <ChartCard title="Top Programming Languages" icon={Code}>
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-96 overflow-y-auto">
           {topLanguages.map(([lang, count], idx) => {
             const maxCount = topLanguages[0]?.[1] || 1;
             const successRate = langSuccess[lang] || 0;
+            const percentage = ((count / topLanguages.reduce((sum, [_, c]) => sum + c, 0)) * 100);
+
+            // Truncate tên dài
+            const displayName = lang.length > 25 ? lang.substring(0, 22) + '...' : lang;
+
             return (
-              <div key={idx} className="flex items-center">
-                <div className="w-40 text-sm font-medium truncate">{lang}</div>
-                <div className="flex-1 ml-3">
-                  <div className="w-full bg-gray-700 rounded-full h-4">
+              <div key={idx} className="flex items-center gap-2" title={lang}>
+                <div className="w-6 text-xs text-gray-400 text-center">{idx + 1}</div>
+                <div className="w-32 text-sm font-medium truncate" title={lang}>
+                  {displayName}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="w-full bg-gray-700 rounded-full h-4 relative overflow-hidden">
                     <div
-                      className="bg-blue-500 h-4 rounded-full transition-all"
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 h-4 rounded-full transition-all duration-300"
                       style={{ width: `${(count / maxCount) * 100}%` }}
                     />
                   </div>
                 </div>
-                <div className="w-20 text-right text-sm ml-3">
-                  <span className="font-bold">{count}</span>
-                  <span className="text-green-400 ml-2 text-xs">({successRate.toFixed(1)}%)</span>
+                <div className="flex flex-col items-end text-xs min-w-[80px]">
+                  <span className="font-bold text-white">{count.toLocaleString()}</span>
+                  <div className="flex gap-2 text-gray-400">
+                    <span>{percentage.toFixed(1)}%</span>
+                    <span className="text-green-400">✓{successRate.toFixed(1)}%</span>
+                  </div>
                 </div>
               </div>
             );
